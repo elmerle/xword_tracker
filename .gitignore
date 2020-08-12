@@ -12,8 +12,8 @@ Cargo.lock
 # Config (with login info)
 config.yaml
 
-# Debug file
-debug.log
+# Database
+xword.db
 
 #Added by cargo
 

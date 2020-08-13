@@ -5,8 +5,11 @@ use chrono::Duration;
 use chrono::naive::NaiveDate;
 use chrono::prelude::*;
 use failure::Error;
+use futures::executor::block_on;
+use futures::future::join_all;
 
-static EARLIEST_SOLVE: &str = "2015-06-01";
+//static EARLIEST_SOLVE: &str = "2015-06-01";
+static EARLIEST_SOLVE: &str = "2017-07-01";
 
 pub struct Tracker {
     db: Database,
@@ -21,21 +24,28 @@ impl Tracker {
         })
     }
 
+    // pub fn foo(&self) {
+    //     block_on(self.nytimes.get_history("2020-07-01", "2020-08-01")).expect("blah");
+    // }
+
     pub fn update_times(&mut self) -> Result<(), Error> {
+        //async {
         let mut curr = self.get_last_solve()?;
         let today = Utc::now().date();
+        let mut futs = vec![];
 
         while curr <= today {
             let start = curr.format("%Y-%m-%d").to_string();
             let next = curr + Duration::days(30);
             let end = next.format("%Y-%m-%d").to_string();
-            self.nytimes.get_history(&start, &end)?;
+            futs.push(self.nytimes.get_history(start, end));
 
             curr = next;
         }
 
-        
-
+        block_on(join_all(futs));
+        //Ok::<(), Error>(())
+        //}.await?;
         Ok(())
     }
 

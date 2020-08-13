@@ -7,11 +7,13 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use failure::Error;
+use tokio;
 use yaml_rust::{Yaml, YamlLoader};
 
 use tracker::Tracker;
 
-fn main() -> Result<(), Error> {
+#[tokio::main]
+async fn main() -> Result<(), Error> {
     let config = config()?;
 
     // let path = PathBuf::from(r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe");
@@ -20,8 +22,9 @@ fn main() -> Result<(), Error> {
     // let tab = browser.wait_for_initial_tab()?;
     // login(&tab, &config)?;
 
-    let tracker = Tracker::new("todo".to_string());
-    
+    let mut tracker = Tracker::new("todo".to_string())?;
+    //tracker.foo();
+    tracker.update_times()?;
 
     Ok(())
 }

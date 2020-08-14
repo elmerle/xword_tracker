@@ -1,3 +1,5 @@
+//use crate::nytimes::XwordSummary;
+
 use rusqlite::{Connection, params, Result};
 
 pub struct Database {
@@ -22,5 +24,18 @@ impl Database {
             None => return Ok(None)
         };
     }
+
+    pub fn update_last_solve(&mut self) -> Result<()> {
+        Ok(())
+    }
+
+    // pub fn update_history(&mut self, xwords: Vec<XwordSummary>) -> Result<()> {
+    //     let mut stmt = self.conn.prepare("REPLACE INTO xwords VALUES (?, ?, ?)")?;
+    //     xwords.iter().for_each(|xword| {
+    //         stmt.execute(&[xword.)
+    //     });
+    //     Ok(())
+    // }
+
 
 }

@@ -7,14 +7,22 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use failure::Error;
+use futures::stream::{self, StreamExt};
 use tokio;
 use yaml_rust::{Yaml, YamlLoader};
 
 use tracker::Tracker;
 
-#[tokio::main]
+struct Xword {
+
+}
+
+#[tokio::main(core_threads=4, max_threads=8)]
+//#[tokio::main]
 async fn main() -> Result<(), Error> {
+    env_logger::init();
     let config = config()?;
+
 
     // let path = PathBuf::from(r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe");
     // let path = PathBuf::from(r"/mnt/c/Program Files (x86)/Google/Chrome/Application/chrome.exe");
@@ -22,9 +30,10 @@ async fn main() -> Result<(), Error> {
     // let tab = browser.wait_for_initial_tab()?;
     // login(&tab, &config)?;
 
-    let mut tracker = Tracker::new("todo".to_string())?;
-    //tracker.foo();
-    tracker.update_times()?;
+    let mut tracker = Tracker::new("2UpqIGuS2G/lJhJrtcnpckl0t.SrDv0OhLqm4VdjInRdqG1Mf3LYxupuTwqL7IkUOwjOoea6bgYnT6Q1KiaXrnBNNELieBARpvzmk2XaDneSmOAwdrWzeNm/tlGoddbcewMaeJYR/IBXdPrTGW6xmzCutvM.KilrchgnOxRoBoMsMCN/xm6fhVXSlVACaiQLsJ5i8MdzZHoVL1lE5/cAB4ERur5n7S6iGE/8yjeb7W1LYVfqHf0Nn4EM00".to_string())?;
+    tracker.foo().await?;
+    //tracker.update_times().await?;
+    //tracker.update_times()?;
 
     Ok(())
 }

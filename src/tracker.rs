@@ -1,5 +1,6 @@
 use crate::database::Database;
 use crate::nytimes::NYTimes;
+use crate::nytimes::XwordList;
 
 use chrono::Duration;
 use chrono::naive::NaiveDate;
@@ -7,6 +8,7 @@ use chrono::prelude::*;
 use failure::Error;
 use futures::executor::block_on;
 use futures::future::join_all;
+use futures::{stream, StreamExt, TryStreamExt};
 
 static EARLIEST_SOLVE: &str = "2015-06-01";
 //static EARLIEST_SOLVE: &str = "2019-07-01";
@@ -36,30 +38,34 @@ impl Tracker {
     //     Ok(())
     // }
 
-    // fn get_xwords(&mut self) -> Vec<XwordList> {
-    //     let mut curr = self.get_last_solve()?;
-    //     let today = Utc::now().date();
-    //     let mut futs = vec![];
+    pub async fn get_xwords(&mut self) -> Result<(), Error> {
+        let mut curr = self.get_last_solve()?;
+        let today = Utc::now().date();
+        let mut futs = vec![];
 
-    //     while curr <= today {
-    //         let start = curr.format("%Y-%m-%d").to_string();
-    //         let next = curr + Duration::days(30);
-    //         let end = next.format("%Y-%m-%d").to_string();
-    //         futs.push(self.nytimes.get_history(start, end));
+        while curr <= today {
+            let start = curr.format("%Y-%m-%d").to_string();
+            let next = curr + Duration::days(30);
+            let end = next.format("%Y-%m-%d").to_string();
+            futs.push(self.nytimes.get_history(start, end));
 
-    //         curr = next;
-    //     }
+            curr = next;
+        }
 
-    //     //block_on(join_all(futs));
-    //     //let xwords = join_all(futs).await;
-    // }
+        //block_on(join_all(futs));
+        let xwords = join_all(futs).await;
+        //let st = stream::iter(futs);
+        //st.try_collect().await;
+        
+        Ok(())
+    }
 
-    // fn get_last_solve(&mut self) -> Result<Date<Utc>, Error> {
-    //     let last_solve = self.db.get_last_solve()?;
-    //     let last_solve = match last_solve {
-    //         Some(time) => NaiveDate::parse_from_str(&time, "%Y-%m-%d")?,
-    //         None => NaiveDate::parse_from_str(EARLIEST_SOLVE, "%Y-%m-%d")?
-    //     };
-    //     Ok(Utc.from_utc_date(&last_solve))
-    // }
+    fn get_last_solve(&mut self) -> Result<Date<Utc>, Error> {
+        let last_solve = self.db.get_last_solve()?;
+        let last_solve = match last_solve {
+            Some(time) => NaiveDate::parse_from_str(&time, "%Y-%m-%d")?,
+            None => NaiveDate::parse_from_str(EARLIEST_SOLVE, "%Y-%m-%d")?
+        };
+        Ok(Utc.from_utc_date(&last_solve))
+    }
 }

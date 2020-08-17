@@ -1,5 +1,5 @@
 use failure::Error;
-use futures::stream::{self, StreamExt, TryStreamExt};
+use futures::stream::{self, StreamExt, TryStreamExt, futures_unordered::FuturesUnordered};
 use reqwest::{Client, Method};
 use serde::Deserialize;
 use thiserror::Error;
@@ -27,7 +27,7 @@ struct XwordSummaryInternal {
 }
 
 #[derive(Deserialize)]
-struct XwordList {
+pub struct XwordList {
     results: Vec<XwordSummaryInternal>
 }
 
@@ -94,8 +94,9 @@ impl NYTimes {
 
     pub async fn get_times(&self, start_date: String, end_date: String) -> Result<Vec<XwordSummary>, NYTimesError> {
         let xword_list = self.get_history(start_date, end_date).await?.results;
-        let stream = stream::iter(xword_list);
-        let stream = stream.then(|xword| async move {
+        //let stream = stream::iter(xword_list);
+        let stream = xword_list.iter().map(|xword| async move {
+            println!("starting async fn for {}", xword.puzzle_id);
             let time = self.get_xword_time(xword.puzzle_id).await?;
             let solve_state = if xword.solved {
                 match xword.star {
@@ -107,18 +108,19 @@ impl NYTimes {
             };
 
             Ok::<XwordSummary, NYTimesError>(XwordSummary {
-                print_date: xword.print_date,
+                print_date: xword.print_date.clone(),
                 solved: solve_state
             })
         });
-        stream.try_collect().await
+        stream.collect::<FuturesUnordered<_>>().try_collect().await
     }
 
-    async fn get_history(&self, start_date: String, end_date: String) -> reqwest::Result<XwordList> {
+    pub async fn get_history(&self, start_date: String, end_date: String) -> reqwest::Result<XwordList> {
         println!("getting history from {}", start_date);
         let url = format!("http://nyt-games-prd.appspot.com/svc/crosswords/v3/36569100/puzzles.json?publish_type=daily&date_start={}&date_end={}", start_date, end_date);
         let response = self.client.get(&url).header("nyt-s", &self.session).send().await?;
         let xword_list = response.json::<XwordList>().await?;
+        println!("got history for {}", start_date);
         Ok(xword_list)
     }
 

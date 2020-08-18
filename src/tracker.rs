@@ -28,7 +28,9 @@ impl Tracker {
 
     pub async fn foo(&self) -> Result<(), Error> {
         //block_on(self.nytimes.get_history("2020-07-01", "2020-08-01")).expect("blah");
-        let x = self.nytimes.get_times("2020-07-01".to_string(), "2020-08-01".to_string()).await;
+        let x = self.nytimes.get_all_times(
+            Utc.from_utc_date(&NaiveDate::parse_from_str("2020-07-01", "%Y-%m-%d")?), 
+            Utc.from_utc_date(&NaiveDate::parse_from_str("2020-08-01", "%Y-%m-%d")?)).await;
         println!("{:?}", x);
         Ok(())
     }
@@ -38,27 +40,27 @@ impl Tracker {
     //     Ok(())
     // }
 
-    pub async fn get_xwords(&mut self) -> Result<(), Error> {
-        let mut curr = self.get_last_solve()?;
-        let today = Utc::now().date();
-        let mut futs = vec![];
+    // pub async fn get_xwords(&mut self) -> Result<(), Error> {
+    //     let mut curr = self.get_last_solve()?;
+    //     let today = Utc::now().date();
+    //     let mut futs = vec![];
 
-        while curr <= today {
-            let start = curr.format("%Y-%m-%d").to_string();
-            let next = curr + Duration::days(30);
-            let end = next.format("%Y-%m-%d").to_string();
-            futs.push(self.nytimes.get_history(start, end));
+    //     while curr <= today {
+    //         let start = curr.format("%Y-%m-%d").to_string();
+    //         let next = curr + Duration::days(30);
+    //         let end = next.format("%Y-%m-%d").to_string();
+    //         futs.push(self.nytimes.get_history(start, end));
 
-            curr = next;
-        }
+    //         curr = next;
+    //     }
 
-        //block_on(join_all(futs));
-        let xwords = join_all(futs).await;
-        //let st = stream::iter(futs);
-        //st.try_collect().await;
+    //     //block_on(join_all(futs));
+    //     let xwords = join_all(futs).await;
+    //     //let st = stream::iter(futs);
+    //     //st.try_collect().await;
         
-        Ok(())
-    }
+    //     Ok(())
+    // }
 
     fn get_last_solve(&mut self) -> Result<Date<Utc>, Error> {
         let last_solve = self.db.get_last_solve()?;

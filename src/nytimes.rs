@@ -1,4 +1,8 @@
+use chrono::naive::NaiveDate;
+use chrono::prelude::*;
+
 use failure::Error;
+use futures::Future;
 use futures::stream::{self, StreamExt, TryStreamExt, futures_unordered::FuturesUnordered};
 use reqwest::{Client, Method};
 use serde::Deserialize;
@@ -19,7 +23,7 @@ struct XwordCalc {
 }
 
 #[derive(Deserialize, Debug)]
-struct XwordSummaryInternal {
+pub struct XwordSummaryInternal {
     print_date: String,
     puzzle_id: u16,
     solved: bool,
@@ -47,7 +51,7 @@ pub enum SolveState {
 #[derive(Debug)]
 pub struct XwordSummary {
     print_date: String,
-    solved: SolveState
+    solve_state: SolveState
 }
 
 // impl XwordSummary {
@@ -92,8 +96,47 @@ impl NYTimes {
         })
     }
 
+    // async fn get_all_times_foo<T: Future>(&self, start_date: String, end_date: String) -> Result<(), NYTimesError> {
+    //     let hist = self.get_history(start_date, end_date).await?;
+    //     let futs = FuturesUnordered::new();
+    //     for xword in hist { 
+    //         futs.push(self.get_xword_time(xword.puzzle_id));
+    //     }
+
+    //     futs.try_collect().await;
+
+    //     Ok::<(), NYTimesError>(())
+    // }
+
+    // pub async fn get_all_times(&self, start_date: Date<Utc>, end_date: Date<Utc>) -> Result<Vec<XwordSummary>, NYTimesError> {
+    pub async fn get_all_times(&self, start_date: Date<Utc>, end_date: Date<Utc>) -> Result<Vec<XwordSummary>, NYTimesError> {
+        let mut curr = start_date;
+        let history_futs = FuturesUnordered::new();
+
+        while curr <= end_date {
+            let start = curr.format("%Y-%m-%d").to_string();
+            let next = curr + chrono::Duration::days(30);
+            let end = next.format("%Y-%m-%d").to_string();
+            println!("adding {}", start);
+
+            //futs.push(self.get_all_times_foo(start, end, futs));
+            history_futs.push(self.get_history(start, end));
+
+            curr = next;
+        }
+
+        let time_futs = FuturesUnordered::new();
+        history_futs.try_collect::<Vec<_>>().await?.into_iter().flatten().for_each(|xword| {
+            time_futs.push(self.process_xword_summary(xword));
+        });
+        
+        Ok(time_futs.try_collect::<Vec<_>>().await?)
+
+        // Err(NYTimesError::InvalidSessionError)
+    }
+
     pub async fn get_times(&self, start_date: String, end_date: String) -> Result<Vec<XwordSummary>, NYTimesError> {
-        let xword_list = self.get_history(start_date, end_date).await?.results;
+        let xword_list = self.get_history(start_date, end_date).await?;
         //let stream = stream::iter(xword_list);
         let stream = xword_list.iter().map(|xword| async move {
             println!("starting async fn for {}", xword.puzzle_id);
@@ -109,22 +152,41 @@ impl NYTimes {
 
             Ok::<XwordSummary, NYTimesError>(XwordSummary {
                 print_date: xword.print_date.clone(),
-                solved: solve_state
+                solve_state: solve_state
             })
         });
         stream.collect::<FuturesUnordered<_>>().try_collect().await
     }
 
-    pub async fn get_history(&self, start_date: String, end_date: String) -> reqwest::Result<XwordList> {
+    pub async fn get_history(&self, start_date: String, end_date: String) -> Result<Vec<XwordSummaryInternal>, NYTimesError> {
+    // pub async fn get_history(&self, start_date: String, end_date: String) -> reqwest::Result<Vec<XwordSummaryInternal>> {
         println!("getting history from {}", start_date);
         let url = format!("http://nyt-games-prd.appspot.com/svc/crosswords/v3/36569100/puzzles.json?publish_type=daily&date_start={}&date_end={}", start_date, end_date);
         let response = self.client.get(&url).header("nyt-s", &self.session).send().await?;
         let xword_list = response.json::<XwordList>().await?;
         println!("got history for {}", start_date);
-        Ok(xword_list)
+        Ok(xword_list.results)
+    }
+
+    async fn process_xword_summary(&self, xword: XwordSummaryInternal) -> Result<XwordSummary, NYTimesError> {
+        let time = self.get_xword_time(xword.puzzle_id).await?;
+        let solve_state = if xword.solved {
+            match xword.star {
+                Some(_) => SolveState::Gold { time: time.expect(&format!("Missing time for {} xword", xword.print_date)) },
+                None => SolveState::Solved
+            }
+        } else {
+            SolveState::Unsolved
+        };
+
+        Ok(XwordSummary {
+            print_date: xword.print_date.clone(),
+            solve_state: solve_state
+        })
     }
 
     async fn get_xword_time(&self, id: u16) -> Result<Option<u16>, NYTimesError> {
+    //async fn get_xword_time(&self, id: u16) -> Result<(), NYTimesError> {
         println!("getting time for {}", id);
         let url = format!("https://nyt-games-prd.appspot.com/svc/crosswords/v6/game/{}.json", id);
         let response = self.client.get(&url).header("nyt-s", &self.session).send().await?;

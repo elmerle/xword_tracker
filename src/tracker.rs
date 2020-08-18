@@ -1,17 +1,26 @@
-use crate::database::Database;
-use crate::nytimes::NYTimes;
-use crate::nytimes::XwordList;
+use crate::database::{Database, DbError};
+use crate::nytimes::{NYTimes, XwordSummary, NYTimesError, SolveState};
+use crate::util::*;
 
-use chrono::Duration;
-use chrono::naive::NaiveDate;
 use chrono::prelude::*;
-use failure::Error;
-use futures::executor::block_on;
-use futures::future::join_all;
-use futures::{stream, StreamExt, TryStreamExt};
+use thiserror::Error;
 
 static EARLIEST_SOLVE: &str = "2015-06-01";
-//static EARLIEST_SOLVE: &str = "2019-07-01";
+
+#[derive(Error, Debug)]
+pub enum TrackerError {
+    // #[error("Invalid session token provided")]
+    // InvalidSessionError,
+
+    #[error(transparent)]
+    NYTimesError(#[from] NYTimesError),
+
+    #[error(transparent)]
+    DbError(#[from] DbError),
+
+    #[error(transparent)]
+    DateError(#[from] chrono::ParseError)
+}
 
 pub struct Tracker {
     db: Database,
@@ -19,55 +28,45 @@ pub struct Tracker {
 }
 
 impl Tracker {
-    pub fn new(session: String) -> Result<Tracker, Error> {
+    pub fn new(session: String) -> Result<Tracker, TrackerError> {
         Ok(Tracker{
             db: Database::new("xword.db")?,
             nytimes: NYTimes::new(session)?
         })
     }
 
-    pub async fn foo(&self) -> Result<(), Error> {
-        //block_on(self.nytimes.get_history("2020-07-01", "2020-08-01")).expect("blah");
-        let x = self.nytimes.get_all_times(
-            Utc.from_utc_date(&NaiveDate::parse_from_str("2020-07-01", "%Y-%m-%d")?), 
-            Utc.from_utc_date(&NaiveDate::parse_from_str("2020-08-01", "%Y-%m-%d")?)).await;
-        println!("{:?}", x);
+    pub async fn update_times(&mut self) -> Result<(), TrackerError> {
+        let xwords = self.get_all_xwords().await?;
+        self.db.save_xwords(&xwords)?;
         Ok(())
     }
 
-    // pub async fn update_times(&mut self) -> Result<(), Error> {
-    //     let xwords = self.get_xwords();
-    //     Ok(())
-    // }
+    async fn get_all_xwords(&self) -> Result<Vec<XwordSummary>, TrackerError> {
+        let start = self.get_last_solve()?;
+        let today = Utc::now().date();
 
-    // pub async fn get_xwords(&mut self) -> Result<(), Error> {
-    //     let mut curr = self.get_last_solve()?;
-    //     let today = Utc::now().date();
-    //     let mut futs = vec![];
+        let xwords = self.nytimes.get_all_times(start, today).await?;
+        let latest_solve = xwords.iter().max_by_key(|x| {
+            match x.solve_state {
+                SolveState::Unsolved => string_to_date(EARLIEST_SOLVE),
+                SolveState::Solved | SolveState::Gold { .. } => x.print_date
+            }
+        });
+        if let Some(latest_solve) = latest_solve { 
+            self.db.set_last_solve(latest_solve.print_date)?;
+        }
+        Ok(xwords)
+    }
 
-    //     while curr <= today {
-    //         let start = curr.format("%Y-%m-%d").to_string();
-    //         let next = curr + Duration::days(30);
-    //         let end = next.format("%Y-%m-%d").to_string();
-    //         futs.push(self.nytimes.get_history(start, end));
-
-    //         curr = next;
-    //     }
-
-    //     //block_on(join_all(futs));
-    //     let xwords = join_all(futs).await;
-    //     //let st = stream::iter(futs);
-    //     //st.try_collect().await;
-        
-    //     Ok(())
-    // }
-
-    fn get_last_solve(&mut self) -> Result<Date<Utc>, Error> {
+    fn get_last_solve(&self) -> Result<Date<Utc>, TrackerError> {
         let last_solve = self.db.get_last_solve()?;
-        let last_solve = match last_solve {
-            Some(time) => NaiveDate::parse_from_str(&time, "%Y-%m-%d")?,
-            None => NaiveDate::parse_from_str(EARLIEST_SOLVE, "%Y-%m-%d")?
-        };
-        Ok(Utc.from_utc_date(&last_solve))
+        match last_solve {
+            Some(time) => Ok(time),
+            None => Ok(string_to_date(EARLIEST_SOLVE))
+        }
+    }
+
+    pub fn calculate_stats(&self) {
+
     }
 }

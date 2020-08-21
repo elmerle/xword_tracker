@@ -1,7 +1,7 @@
 use chrono::naive::NaiveDate;
 use chrono::prelude::*;
 
-pub fn date_to_string(date: Date<Utc>) -> String {
+pub fn date_to_string(date: &Date<Utc>) -> String {
     date.format("%Y-%m-%d").to_string()
 }
 

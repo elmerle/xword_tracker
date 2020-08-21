@@ -1,5 +1,6 @@
 mod database;
 mod nytimes;
+mod stats;
 mod tracker;
 mod util;
 
@@ -26,6 +27,7 @@ async fn main() -> Result<()> {
     let session = config["session"].as_str().expect("Failed to get session id").to_string();
     let mut tracker = Tracker::new(session)?;
     tracker.update_times().await?;
+    tracker.plot_stats()?;
     // tracker.foo().await?;
     //tracker.get_xwords().await?;
     //tracker.update_times().await?;

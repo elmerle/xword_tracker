@@ -1,3 +1,4 @@
+use crate::tracker::{SolveState, XwordSummary};
 use crate::util::*;
 
 use chrono::prelude::*;
@@ -18,13 +19,13 @@ struct XwordCalc {
     solved: bool,
     
     #[serde(rename="secondsSpentSolving")]
-    seconds_spent_solving: u16
+    seconds_spent_solving: u32
 }
 
 #[derive(Deserialize, Debug)]
 struct XwordSummaryInternal {
     print_date: String,
-    puzzle_id: u16,
+    puzzle_id: u32,
     solved: bool,
     star: Option<String>
 }
@@ -32,19 +33,6 @@ struct XwordSummaryInternal {
 #[derive(Deserialize, Debug)]
 struct XwordList {
     results: Vec<XwordSummaryInternal>
-}
-
-#[derive(Debug)]
-pub enum SolveState {
-    Unsolved,
-    Solved,
-    Gold { time: u16 }
-}
-
-#[derive(Debug)]
-pub struct XwordSummary {
-    pub print_date: Date<Utc>,
-    pub solve_state: SolveState
 }
 
 pub struct NYTimes {
@@ -65,7 +53,7 @@ pub enum NYTimesError {
 }
 
 impl NYTimes {
-    pub fn new(session_: String) -> Result<NYTimes, NYTimesError> {
+    pub fn new(session_: String) -> Result<Self, NYTimesError> {
         Ok(NYTimes {
             session: session_,
             client: Client::builder()
@@ -82,7 +70,7 @@ impl NYTimes {
 
         while curr <= end_date {
             let next = curr + chrono::Duration::days(30);
-            history_futs.push(self.get_history(date_to_string(curr), date_to_string(next)));
+            history_futs.push(self.get_history(date_to_string(&curr), date_to_string(&next)));
             curr = next;
         }
 
@@ -122,7 +110,7 @@ impl NYTimes {
         })
     }
 
-    async fn get_xword_time(&self, id: u16) -> Result<Option<u16>, NYTimesError> {
+    async fn get_xword_time(&self, id: u32) -> Result<Option<u32>, NYTimesError> {
         let url = format!("https://nyt-games-prd.appspot.com/svc/crosswords/v6/game/{}.json", id);
         let response = self.client.get(&url).header("nyt-s", &self.session).send().await?;
         println!("got response for {}", id);

@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS xwords(
     duration INTEGER
 );
 
-CREATE TABLE IF NOT EXISTS last_solve(
-    date DATE REFERENCES xwords(date)
+CREATE TABLE IF NOT EXISTS misc(
+    k TEXT NOT NULL PRIMARY KEY,
+    v TEXT
 );

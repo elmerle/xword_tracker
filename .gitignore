@@ -15,6 +15,9 @@ config.yaml
 # Database
 xword.db
 
+# Graphs
+graphs/
+
 #Added by cargo
 
 /target
